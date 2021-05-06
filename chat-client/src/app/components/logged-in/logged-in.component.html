@@ -1,0 +1,8 @@
+<div>
+    <div style="width: 30%; display: inline-block; margin-right: 3%;">
+        <app-user-list (messageEvent)="receiveMessage($event)"></app-user-list>
+    </div>
+    <div style="width: 65%; display: inline-block;">
+        <app-messages [selected]="selected"></app-messages>
+    </div>
+</div>
