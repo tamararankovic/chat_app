@@ -11,20 +11,18 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
-import model.Host;
-
 public interface ConnectionManager {
 
 	@POST
 	@Path("/register")
 	@Produces(MediaType.APPLICATION_JSON)
 	@Consumes(MediaType.APPLICATION_JSON)
-	public List<Host> registerNode(Host node);
+	public List<String> registerNode(String nodeAlias);
 	
 	@POST
 	@Path("/node")
 	@Consumes(MediaType.APPLICATION_JSON)
-	public void addNode(Host node);
+	public void addNode(String nodeAlias);
 	
 	@DELETE
 	@Path("/node/{alias}")

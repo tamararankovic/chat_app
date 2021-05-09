@@ -4,8 +4,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -16,6 +15,13 @@ import javax.ejb.Remote;
 import javax.ejb.Schedule;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
+import javax.management.AttributeNotFoundException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.management.ReflectionException;
 import javax.ws.rs.Path;
 
 import org.jboss.resteasy.client.jaxrs.ResteasyClient;
@@ -32,7 +38,7 @@ import util.ResourceLoader;
 public class ConnectionManagerBean implements ConnectionManager {
 
 	private Host localNode;
-	private List<Host> connectedNodes = new ArrayList<Host>();
+	private List<String> connectedNodes = new ArrayList<String>();
 	
 	@PostConstruct
 	private void init() {
@@ -42,57 +48,52 @@ public class ConnectionManagerBean implements ConnectionManager {
 	}
 	
 	@Override
-	public List<Host> registerNode(Host node) {
-		for (Host n : connectedNodes) {
+	public List<String> registerNode(String nodeAlias) {
+		System.out.println("Registering a node with alias: " + nodeAlias);
+		for (String n : connectedNodes) {
 			ResteasyClient client = new ResteasyClientBuilder().build();
-			ResteasyWebTarget rtarget = client.target("http://" + n.getAddress() + ":8080/siebog-war/rest/connection");
+			ResteasyWebTarget rtarget = client.target("http://" + n + "/siebog-war/rest/connection");
 			ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
-			rest.addNode(node);
+			rest.addNode(nodeAlias);
 		}
 		//TODO: Send back lists of registered users, logged in users and messages
 		//TODO: If unsuccessful, delete node and instruct all the other nodes to do the same
-		List<Host> returnNodes = new ArrayList<Host>(connectedNodes);
-		returnNodes.add(localNode);
-		connectedNodes.add(node);
+		List<String> returnNodes = new ArrayList<String>(connectedNodes);
+		returnNodes.add(localNode.getAlias());
+		connectedNodes.add(nodeAlias);
 		return returnNodes;
 	}
 
 	@Override
-	public void addNode(Host node) {
-		connectedNodes.add(node);
-		
+	public void addNode(String nodeAlias) {
+		System.out.println("Adding node with alias: " + nodeAlias);
+		connectedNodes.add(nodeAlias);
 	}
 
 	@Override
 	public void deleteNode(String alias) {
-		Host node = connectedNodes.stream().filter(n -> n.getAlias().equals(alias)).findFirst().orElse(null);
-		if(node != null) {
-			connectedNodes.remove(node);
-			//TODO: Delete users that were logged in on this node
-		}
+		System.out.println("Deleting node with alias: " + alias);
+		connectedNodes.remove(alias);
+		//TODO: Delete users that were logged in in this node
 	}
 
 	@Override
 	public String pingNode() {
+		System.out.println("Pinged");
 		return "ok";
 	}
 	
 	private void getLocalNodeInfo() {
-		try {
-			InetAddress inetAddress = InetAddress.getLocalHost();
-			String nodeAddress = inetAddress.getHostAddress();
-			String nodeName = inetAddress.getHostName();
-			String masterAddress = getMasterAddress();
-			localNode = new Host(nodeAddress, nodeName, masterAddress);
-			System.out.println("node name: " + localNode.getAlias() + ", node address: " + 
-			localNode.getAddress() + ", master address: " + 
-			localNode.getMasterAddress());
-		} catch (UnknownHostException e) {
-			e.printStackTrace();
-		}
+		String nodeAddress = getNodeAddress();
+		String nodeAlias = getNodeAlias() + ":8080";
+		String masterAlias = getMasterAlias();
+		localNode = new Host(nodeAddress, nodeAlias, masterAlias);
+		System.out.println("node alias: " + localNode.getAlias() + ", node address: " + 
+		localNode.getAddress() + ", master alias: " + 
+		localNode.getMasterAlias());
 	}
 	
-	private String getMasterAddress() {
+	private String getMasterAlias() {
 		try {
 			File f = ResourceLoader.getFile(ConnectionManager.class, "", "connection.properties");
 			FileInputStream fileInput = new FileInputStream(f);
@@ -109,36 +110,63 @@ public class ConnectionManagerBean implements ConnectionManager {
 		}
 	}
 	
+	private String getNodeAddress() {
+		try {
+			MBeanServer mBeanServer = ManagementFactory.getPlatformMBeanServer();
+			ObjectName http = new ObjectName("jboss.as:socket-binding-group=standard-sockets,socket-binding=http");
+			return (String) mBeanServer.getAttribute(http, "boundAddress");
+		} catch (MalformedObjectNameException | InstanceNotFoundException | AttributeNotFoundException | ReflectionException | MBeanException e) {
+			e.printStackTrace();
+			return null;
+		}
+		
+	}
+	
+	private String getNodeAlias() {
+		return System.getProperty("jboss.node.name");
+	}
+	
 	private void handshake() {
+		System.out.println("Initiating a handshake, master: " + localNode.getMasterAlias());
 		ResteasyClient client = new ResteasyClientBuilder().build();
-		ResteasyWebTarget rtarget = client.target("http://" + localNode.getMasterAddress() + ":8080/chat-war/rest/connection");
+		ResteasyWebTarget rtarget = client.target("http://" + localNode.getMasterAlias() + "/chat-war/rest/connection");
 		ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
-		connectedNodes = rest.registerNode(localNode);
+		connectedNodes = rest.registerNode(localNode.getAlias());
+		System.out.println("Handshake successful. Connected nodes: " + connectedNodes);
 	}
 	
 	@Schedule(hour = "*", minute="*", second="*/15")
 	private void heartbeat() {
-		for(Host node : connectedNodes) {
+		System.out.println("Heartbeat protocol initiated");
+		for(String node : connectedNodes) {
+			System.out.println("Pinging node with alias: " + node);
 			boolean pingSuccessful = pingNode(node);
-			if(!pingSuccessful)
+			if(!pingSuccessful) {
+				System.out.println("Node with alias: " + node + " not alive. Deleting..");
 				connectedNodes.remove(node);
-				instructNodesToDeleteNode(node.getAlias());
+				instructNodesToDeleteNode(node);
+			}
 		}
 	}
 
-	private boolean pingNode(Host node) {
+	private boolean pingNode(String node) {
 		int triesLeft = 2;
 		boolean pingSuccessful = false;
 		ResteasyClient client = new ResteasyClientBuilder().build();
-		ResteasyWebTarget rtarget = client.target("http://" + node.getAddress() + ":8080/chat-war/rest/connection");
+		ResteasyWebTarget rtarget = client.target("http://" + node + "/chat-war/rest/connection");
 		ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 		while(triesLeft > 0) {
-			String response = rest.pingNode();
-			if(response.equals("ok")) {
-				pingSuccessful = true;
-				break;
+			try {
+				String response = rest.pingNode();
+				if(response.equals("ok")) {
+					pingSuccessful = true;
+					break;
+				}
+			} catch(Exception e) {
+				e.printStackTrace();
+			} finally {
+				triesLeft--;
 			}
-			triesLeft--;
 		}
 		return pingSuccessful;
 	}
@@ -150,8 +178,8 @@ public class ConnectionManagerBean implements ConnectionManager {
 	
 	private void instructNodesToDeleteNode(String nodeAlias) {
 		ResteasyClient client = new ResteasyClientBuilder().build();
-		for(Host node : connectedNodes) {
-			ResteasyWebTarget rtarget = client.target("http://" + node.getAddress() + ":8080/chat-war/rest/connection");
+		for(String node : connectedNodes) {
+			ResteasyWebTarget rtarget = client.target("http://" + node + "/chat-war/rest/connection");
 			ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 			rest.deleteNode(nodeAlias);
 		}

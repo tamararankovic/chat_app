@@ -8,38 +8,35 @@ public class Host implements Serializable {
 
 	private String address;
 	private String alias;
-	private String masterAddress;
+	private String masterAlias;
 	
 	public Host() {
 		
 	}
 	
-	public Host(String address, String alias, String masterAddress) {
+	public Host(String address, String alias, String masterAlias) {
 		super();
 		this.address = address;
 		this.alias = alias;
-		this.masterAddress = masterAddress;
+		this.masterAlias = masterAlias;
 	}
 	
-	public static long getSerialversionuid() {
-		return serialVersionUID;
-	}
 	public String getAddress() {
 		return address;
 	}
 	public String getAlias() {
 		return alias;
 	}
-	public String getMasterAddress() {
-		return masterAddress;
+	public String getMasterAlias() {
+		return masterAlias;
 	}
 	
 	public boolean isMaster() {
-		return masterAddress == null || masterAddress.equals("");
+		return masterAlias == null || masterAlias.equals("");
 	}
 
 	@Override
 	public boolean equals(Object obj) {
-		return this.address.equals(((Host)obj).address);
+		return this.alias.equals(((Host)obj).alias);
 	}
 }
