@@ -8,9 +8,11 @@ import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
+import javax.ejb.AccessTimeout;
 import javax.ejb.Remote;
 import javax.ejb.Schedule;
 import javax.ejb.Singleton;
@@ -78,6 +80,7 @@ public class ConnectionManagerBean implements ConnectionManager {
 	}
 
 	@Override
+	@AccessTimeout(value = 30, unit = TimeUnit.SECONDS)
 	public String pingNode() {
 		System.out.println("Pinged");
 		return "ok";
@@ -135,16 +138,18 @@ public class ConnectionManagerBean implements ConnectionManager {
 		System.out.println("Handshake successful. Connected nodes: " + connectedNodes);
 	}
 	
-	@Schedule(hour = "*", minute="*", second="*/15")
+	@Schedule(hour = "*", minute="*", second="*/30")
 	private void heartbeat() {
-		System.out.println("Heartbeat protocol initiated");
-		for(String node : connectedNodes) {
-			System.out.println("Pinging node with alias: " + node);
-			boolean pingSuccessful = pingNode(node);
-			if(!pingSuccessful) {
-				System.out.println("Node with alias: " + node + " not alive. Deleting..");
-				connectedNodes.remove(node);
-				instructNodesToDeleteNode(node);
+		if(localNode.isMaster()) {
+			System.out.println("Heartbeat protocol initiated");
+			for(String node : connectedNodes) {
+				System.out.println("Pinging node with alias: " + node);
+				boolean pingSuccessful = pingNode(node);
+				if(!pingSuccessful) {
+					System.out.println("Node with alias: " + node + " not alive. Deleting..");
+					connectedNodes.remove(node);
+					instructNodesToDeleteNode(node);
+				}
 			}
 		}
 	}
