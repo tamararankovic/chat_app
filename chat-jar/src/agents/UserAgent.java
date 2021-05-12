@@ -92,7 +92,7 @@ public class UserAgent implements Agent {
 			if (chatManager.logIn(new User(username, password), identifier)) {
 				ws.bindUsernameToSession(username, agentId);
 				ws.send(agentId, "login:OK " + identifier);
-				ws.sendToAllLoggedIn(getLoggedInListTextMessage(chatManager.getLoggedIn()));
+				ws.sendToAllLoggedIn(ws.getLoggedInListTextMessage(chatManager.getLoggedIn()));
 			} else {
 				ws.send(agentId, "login:Logging in was unsuccessful! Incorrect username or password");
 			}
@@ -106,7 +106,7 @@ public class UserAgent implements Agent {
 		if(user != null && user.getUsername().equals(ws.getUsernameBoundToSession(agentId)) && chatManager.logOut(identifier)) {
 			ws.unbindUsernameFromSession(agentId);
 			ws.send(agentId, "logout:OK");
-			ws.sendToAllLoggedIn(getLoggedInListTextMessage(chatManager.getLoggedIn()));
+			ws.sendToAllLoggedIn(ws.getLoggedInListTextMessage(chatManager.getLoggedIn()));
 		} else {
 			ws.send(agentId, "logout:Logging out was unsuccessful!");
 		}
@@ -115,7 +115,7 @@ public class UserAgent implements Agent {
 	private void register(String username, String password) {
 		if(chatManager.register(new User(username, password))) {
 			ws.send(agentId, "register:Registration was successful!");
-			ws.sendToAllLoggedIn(getRegisteredListTextMessage(chatManager.getRegistered()));
+			ws.sendToAllLoggedIn(ws.getRegisteredListTextMessage(chatManager.getRegistered()));
 		} else {
 			ws.send(agentId, "register:Registration was unsuccessful! Try another username");
 		}
@@ -123,17 +123,18 @@ public class UserAgent implements Agent {
 	
 	private void getLoggedIn() {
 		if(ws.getUsernameBoundToSession(agentId) != null)
-			ws.send(agentId, getLoggedInListTextMessage(chatManager.getLoggedIn()));
+			ws.send(agentId, ws.getLoggedInListTextMessage(chatManager.getLoggedIn()));
 	}
 	
 	private void getRegistered() {
 		if(ws.getUsernameBoundToSession(agentId) != null)
-			ws.send(agentId, getRegisteredListTextMessage(chatManager.getRegistered()));
+			ws.send(agentId, ws.getRegisteredListTextMessage(chatManager.getRegistered()));
 	}
 	
 	private void getAllMessages() {
-		if(ws.getUsernameBoundToSession(agentId) != null)
-			ws.send(agentId, getMessageListTextMessage(chatManager.getMessages(ws.getUsernameBoundToSession(agentId))));
+		String username = ws.getUsernameBoundToSession(agentId);
+		if(username != null)
+			ws.send(agentId, ws.getMessageListTextMessage(chatManager.getMessages(username), username));
 	}
 	
 	private void sendMessage(String receiverUsername, String subject, String content) {
@@ -143,8 +144,8 @@ public class UserAgent implements Agent {
 			User sender = chatManager.getRegistered(username);
 			model.Message message = new model.Message(sender, receiver, LocalDateTime.now(), subject, content);
 			chatManager.saveMessage(message);
-			ws.sendToOneLoggedIn(receiverUsername, getMessageTextMessage(message));
-			ws.send(agentId, getMessageListTextMessage(chatManager.getMessages(username)));
+			ws.sendToOneLoggedIn(receiverUsername, ws.getMessageTextMessage(message));
+			ws.send(agentId, ws.getMessageListTextMessage(chatManager.getMessages(username), username));
 		}
 	}
 	
@@ -152,73 +153,5 @@ public class UserAgent implements Agent {
 		List<User> loggedInUsers = chatManager.getLoggedIn();
 		for(User user : loggedInUsers)
 			sendMessage(user.getUsername(), subject, content);
-	}
-	
-	private String getLoggedInListTextMessage(List<User> users) {
-		StringBuilder loggedInList = new StringBuilder();
-		loggedInList.append("loggedInList:");
-		for(User u : users) {
-			loggedInList.append(u.getUsername());
-			loggedInList.append(",");
-		}
-		return loggedInList.toString().substring(0, loggedInList.length()-1);
-	}
-	
-	private String getRegisteredListTextMessage(List<User> users) {
-		StringBuilder registeredList = new StringBuilder();
-		registeredList.append("registeredList:");
-		for(User u : users) {
-			registeredList.append(u.getUsername());
-			registeredList.append(",");
-		}
-		return registeredList.toString().substring(0, registeredList.length()-1);
-	}
-	
-	private String getMessageListTextMessage(List<model.Message> messages) {
-		StringBuilder messageList = new StringBuilder();
-		messageList.append("messageList:");
-		messageList.append("[");
-		for(model.Message m : messages) {
-			String otherUsername = m.getSender().getUsername();
-			boolean incoming = true;
-			if(ws.getUsernameBoundToSession(agentId).equals(otherUsername)) {
-				otherUsername = m.getReceiver().getUsername();
-				incoming = false;
-			}
-			messageList.append("{");
-			messageList.append("\"otherUsername\":\"");
-			messageList.append(otherUsername);
-			messageList.append("\", \"incoming\":\"");
-			messageList.append(incoming);
-			messageList.append("\", \"subject\":\"");
-			messageList.append(m.getSubject());
-			messageList.append("\", \"content\":\"");
-			messageList.append(m.getContent());
-			messageList.append("\", \"dateTime\":\"");
-			messageList.append(m.getCreated());
-			messageList.append("\" }, ");
-		}
-		if(messageList.length() > 13)
-			messageList.deleteCharAt(messageList.lastIndexOf(","));
-		messageList.append("]");
-		return messageList.toString();
-	}
-	
-	private String getMessageTextMessage(model.Message message) {
-		StringBuilder messageText = new StringBuilder();
-		messageText.append("message:");
-		messageText.append("{");
-		messageText.append("\"otherUsername\":\"");
-		messageText.append(message.getSender().getUsername());
-		messageText.append("\", \"incoming\":\"");
-		messageText.append(true);
-		messageText.append("\", \"subject\":\"");
-		messageText.append(message.getSubject());
-		messageText.append("\", \"content\":\"");
-		messageText.append(message.getContent());
-		messageText.append("\", \"dateTime\":\"");
-		messageText.append(message.getCreated());
-		messageText.append("\" }");
-		return messageText.toString();
 	}
 }

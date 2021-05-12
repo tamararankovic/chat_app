@@ -2,6 +2,7 @@ package websocket;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.ejb.LocalBean;
@@ -131,5 +132,73 @@ public class WebSocket {
 			return sessions.get(session);
 		else
 			return null;
+	}
+	
+	public String getLoggedInListTextMessage(List<User> users) {
+		StringBuilder loggedInList = new StringBuilder();
+		loggedInList.append("loggedInList:");
+		for(User u : users) {
+			loggedInList.append(u.getUsername());
+			loggedInList.append(",");
+		}
+		return loggedInList.toString().substring(0, loggedInList.length()-1);
+	}
+	
+	public String getRegisteredListTextMessage(List<User> users) {
+		StringBuilder registeredList = new StringBuilder();
+		registeredList.append("registeredList:");
+		for(User u : users) {
+			registeredList.append(u.getUsername());
+			registeredList.append(",");
+		}
+		return registeredList.toString().substring(0, registeredList.length()-1);
+	}
+	
+	public String getMessageListTextMessage(List<model.Message> messages, String username) {
+		StringBuilder messageList = new StringBuilder();
+		messageList.append("messageList:");
+		messageList.append("[");
+		for(model.Message m : messages) {
+			String otherUsername = m.getSender().getUsername();
+			boolean incoming = true;
+			if(username.equals(otherUsername)) {
+				otherUsername = m.getReceiver().getUsername();
+				incoming = false;
+			}
+			messageList.append("{");
+			messageList.append("\"otherUsername\":\"");
+			messageList.append(otherUsername);
+			messageList.append("\", \"incoming\":\"");
+			messageList.append(incoming);
+			messageList.append("\", \"subject\":\"");
+			messageList.append(m.getSubject());
+			messageList.append("\", \"content\":\"");
+			messageList.append(m.getContent());
+			messageList.append("\", \"dateTime\":\"");
+			messageList.append(m.getCreated());
+			messageList.append("\" }, ");
+		}
+		if(messageList.length() > 13)
+			messageList.deleteCharAt(messageList.lastIndexOf(","));
+		messageList.append("]");
+		return messageList.toString();
+	}
+	
+	public String getMessageTextMessage(model.Message message) {
+		StringBuilder messageText = new StringBuilder();
+		messageText.append("message:");
+		messageText.append("{");
+		messageText.append("\"otherUsername\":\"");
+		messageText.append(message.getSender().getUsername());
+		messageText.append("\", \"incoming\":\"");
+		messageText.append(true);
+		messageText.append("\", \"subject\":\"");
+		messageText.append(message.getSubject());
+		messageText.append("\", \"content\":\"");
+		messageText.append(message.getContent());
+		messageText.append("\", \"dateTime\":\"");
+		messageText.append(message.getCreated());
+		messageText.append("\" }");
+		return messageText.toString();
 	}
 }
