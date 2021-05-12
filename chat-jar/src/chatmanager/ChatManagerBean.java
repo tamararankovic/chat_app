@@ -22,6 +22,7 @@ public class ChatManagerBean implements ChatManagerRemote {
 
 	private Set<User> registeredUsers = new HashSet<User>(); 
 	private Map<String, User> loggedInUsers = new HashMap<String, User>();
+	private Map<String, List<User>> loggedInUsersInOtherHost = new HashMap<String, List<User>>();
 	private List<Message> messages = new ArrayList<Message>();
 	
 	@Override
@@ -62,9 +63,27 @@ public class ChatManagerBean implements ChatManagerRemote {
 
 	@Override
 	public List<User> getLoggedIn() {
+		List<User> users = new ArrayList<User>(loggedInUsers.values());
+		for(List<User> otherHostUsers : loggedInUsersInOtherHost.values()) 
+			users.addAll(otherHostUsers);
+		return users.stream().distinct().collect(Collectors.toList());
+	}
+	
+	@Override
+	public List<User> getLocallyLoggedIn() {
 		return loggedInUsers.values().stream().distinct().collect(Collectors.toList());
 	}
 
+	@Override
+	public List<User> getLoggedInByHost(String host) {
+		return loggedInUsersInOtherHost.get(host);
+	}
+	
+	@Override
+	public void deleteLoggedInByHost(String host) {
+		loggedInUsersInOtherHost.remove(host);
+	}
+	
 	@Override
 	public void saveMessage(Message message) {
 		messages.add(message);
@@ -81,10 +100,10 @@ public class ChatManagerBean implements ChatManagerRemote {
 	}
 
 	@Override
-	public boolean isLoggedIn(String username) {
-		return loggedInUsers.values().stream().anyMatch(u -> u.getUsername().equals(username));
+	public List<Message> getMessages() {
+		return messages;
 	}
-
+	
 	@Override
 	public User getRegistered(String username) {
 		return registeredUsers.stream().filter(u -> u.getUsername().equals(username)).findFirst().orElse(null);
@@ -112,5 +131,28 @@ public class ChatManagerBean implements ChatManagerRemote {
 	
 	private boolean existsLoggedIn(String identifier) {
 		return loggedInUsers.keySet().stream().anyMatch(i -> i.equals(identifier));
+	}
+
+	@Override
+	public void syncLoggedIn(String alias, List<User> users) {
+		loggedInUsersInOtherHost.put(alias, users);
+	}
+
+	@Override
+	public void syncRegistered(List<User> users) {
+		for(User newRegistered : users)
+			if(!registeredUsers.contains(newRegistered))
+				registeredUsers.add(newRegistered);
+	}
+
+	@Override
+	public List<Message> syncMessages(List<Message> messages) {
+		List<Message> newMessages = new ArrayList<Message>();
+		for(Message message : messages)
+			if(!this.messages.contains(message)) {
+				this.messages.add(message);
+				newMessages.add(message);
+			}
+		return newMessages;
 	}
 }

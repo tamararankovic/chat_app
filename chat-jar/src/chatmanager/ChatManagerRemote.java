@@ -20,13 +20,25 @@ public interface ChatManagerRemote {
 	
 	public List<User> getLoggedIn();
 	
+	public List<User> getLocallyLoggedIn();
+	
+	public List<User> getLoggedInByHost(String host);
+	
+	public void deleteLoggedInByHost(String host);
+	
 	public void saveMessage(Message message);
 	
 	public List<Message> getMessages(String username);
 	
-	public boolean isLoggedIn(String username);
+	public List<Message> getMessages();
 	
 	public User getRegistered(String username);
 
 	public User getLoggedIn(String identifier);
+	
+	public void syncLoggedIn(String alias, List<User> users);
+	
+	public void syncRegistered(List<User> users);
+	
+	public List<Message> syncMessages(List<Message> messages);
 }

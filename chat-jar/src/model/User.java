@@ -26,4 +26,9 @@ public class User implements Serializable {
 	public String getPassword() {
 		return password;
 	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return username.equals(((User)obj).username);
+	}
 }

@@ -2,17 +2,16 @@ package connectionmanager;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import javax.ejb.AccessTimeout;
+import javax.ejb.EJB;
+import javax.ejb.LocalBean;
 import javax.ejb.Remote;
 import javax.ejb.Schedule;
 import javax.ejb.Singleton;
@@ -30,17 +29,22 @@ import org.jboss.resteasy.client.jaxrs.ResteasyClient;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.ResteasyWebTarget;
 
+import chatmanager.ChatManagerRemote;
 import model.Host;
+import model.User;
 import util.ResourceLoader;
 
 @Singleton
 @Startup
 @Remote(ConnectionManager.class)
+@LocalBean
 @Path("/connection")
 public class ConnectionManagerBean implements ConnectionManager {
 
 	private Host localNode;
 	private List<String> connectedNodes = new ArrayList<String>();
+	
+	@EJB ChatManagerRemote chm;
 	
 	@PostConstruct
 	private void init() {
@@ -57,13 +61,32 @@ public class ConnectionManagerBean implements ConnectionManager {
 			ResteasyWebTarget rtarget = client.target("http://" + n + "/siebog-war/rest/connection");
 			ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 			rest.addNode(nodeAlias);
+			client.close();
 		}
-		//TODO: Send back lists of registered users, logged in users and messages
-		//TODO: If unsuccessful, delete node and instruct all the other nodes to do the same
-		List<String> returnNodes = new ArrayList<String>(connectedNodes);
-		returnNodes.add(localNode.getAlias());
-		connectedNodes.add(nodeAlias);
-		return returnNodes;
+		int triesLeft = 2;
+		while(triesLeft > 0) {
+			try {
+				postRegistered(nodeAlias);
+				postLoggedIn(nodeAlias, localNode.getAlias(), chm.getLocallyLoggedIn());
+				for(String host : connectedNodes) {
+					List<User> users = chm.getLoggedInByHost(host);
+					if(users != null)
+						postLoggedIn(nodeAlias, host, users);
+				}
+				postMessages(nodeAlias);
+				List<String> returnNodes = new ArrayList<String>(connectedNodes);
+				returnNodes.add(localNode.getAlias());
+				connectedNodes.add(nodeAlias);
+				return returnNodes;
+			} catch (Exception e) {
+				e.printStackTrace();
+			} finally {
+				triesLeft--;
+			}
+		}
+		deleteNode(nodeAlias);
+		instructNodesToDeleteNode(nodeAlias);
+		return new ArrayList<String>();
 	}
 
 	@Override
@@ -76,11 +99,10 @@ public class ConnectionManagerBean implements ConnectionManager {
 	public void deleteNode(String alias) {
 		System.out.println("Deleting node with alias: " + alias);
 		connectedNodes.remove(alias);
-		//TODO: Delete users that were logged in in this node
+		chm.deleteLoggedInByHost(alias);
 	}
 
 	@Override
-	@AccessTimeout(value = 30, unit = TimeUnit.SECONDS)
 	public String pingNode() {
 		System.out.println("Pinged");
 		return "ok";
@@ -104,9 +126,6 @@ public class ConnectionManagerBean implements ConnectionManager {
 			properties.load(fileInput);
 			fileInput.close();
 			return properties.getProperty("master");
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-			return null;
 		} catch (IOException e) {
 			e.printStackTrace();
 			return null;
@@ -135,21 +154,20 @@ public class ConnectionManagerBean implements ConnectionManager {
 		ResteasyWebTarget rtarget = client.target("http://" + localNode.getMasterAlias() + "/chat-war/rest/connection");
 		ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 		connectedNodes = rest.registerNode(localNode.getAlias());
+		client.close();
 		System.out.println("Handshake successful. Connected nodes: " + connectedNodes);
 	}
 	
 	@Schedule(hour = "*", minute="*", second="*/30")
 	private void heartbeat() {
-		if(localNode.isMaster()) {
-			System.out.println("Heartbeat protocol initiated");
-			for(String node : connectedNodes) {
-				System.out.println("Pinging node with alias: " + node);
-				boolean pingSuccessful = pingNode(node);
-				if(!pingSuccessful) {
-					System.out.println("Node with alias: " + node + " not alive. Deleting..");
-					connectedNodes.remove(node);
-					instructNodesToDeleteNode(node);
-				}
+		System.out.println("Heartbeat protocol initiated");
+		for(String node : connectedNodes) {
+			System.out.println("Pinging node with alias: " + node);
+			boolean pingSuccessful = pingNode(node);
+			if(!pingSuccessful) {
+				System.out.println("Node with alias: " + node + " not alive. Deleting..");
+				connectedNodes.remove(node);
+				instructNodesToDeleteNode(node);
 			}
 		}
 	}
@@ -157,12 +175,13 @@ public class ConnectionManagerBean implements ConnectionManager {
 	private boolean pingNode(String node) {
 		int triesLeft = 2;
 		boolean pingSuccessful = false;
-		ResteasyClient client = new ResteasyClientBuilder().build();
-		ResteasyWebTarget rtarget = client.target("http://" + node + "/chat-war/rest/connection");
-		ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 		while(triesLeft > 0) {
 			try {
+				ResteasyClient client = new ResteasyClientBuilder().build();
+				ResteasyWebTarget rtarget = client.target("http://" + node + "/chat-war/rest/connection");
+				ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 				String response = rest.pingNode();
+				client.close();
 				if(response.equals("ok")) {
 					pingSuccessful = true;
 					break;
@@ -182,11 +201,51 @@ public class ConnectionManagerBean implements ConnectionManager {
 	}
 	
 	private void instructNodesToDeleteNode(String nodeAlias) {
-		ResteasyClient client = new ResteasyClientBuilder().build();
 		for(String node : connectedNodes) {
+			ResteasyClient client = new ResteasyClientBuilder().build();
 			ResteasyWebTarget rtarget = client.target("http://" + node + "/chat-war/rest/connection");
 			ConnectionManager rest = rtarget.proxy(ConnectionManager.class);
 			rest.deleteNode(nodeAlias);
+			client.close();
 		}
+	}
+	
+	public void postLoggedIn() {
+		for(String alias : connectedNodes)
+			postLoggedIn(alias, localNode.getAlias(), chm.getLocallyLoggedIn());
+	}
+	
+	private void postLoggedIn(String alias, String host, List<User> users) {
+		ResteasyClient client = new ResteasyClientBuilder().build();
+		ResteasyWebTarget rtarget = client.target("http://" + alias + "/chat-war/rest/sync");
+		DataSync rest = rtarget.proxy(DataSync.class);
+		rest.syncLoggedIn(host, users);
+		client.close();
+	}
+	
+	public void postRegistered() {
+		for(String alias : connectedNodes)
+			postRegistered(alias);
+	}
+	
+	private void postRegistered(String alias) {
+		ResteasyClient client = new ResteasyClientBuilder().build();
+		ResteasyWebTarget rtarget = client.target("http://" + alias + "/chat-war/rest/sync");
+		DataSync rest = rtarget.proxy(DataSync.class);
+		rest.syncRegistered(chm.getRegistered());
+		client.close();
+	}
+	
+	public void postMessages() {
+		for(String alias : connectedNodes)
+			postMessages(alias);
+	}
+	
+	private void postMessages(String alias) {
+		ResteasyClient client = new ResteasyClientBuilder().build();
+		ResteasyWebTarget rtarget = client.target("http://" + alias + "/chat-war/rest/sync");
+		DataSync rest = rtarget.proxy(DataSync.class);
+		rest.syncMessages(chm.getMessages());
+		client.close();
 	}
 }

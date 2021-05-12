@@ -45,4 +45,14 @@ public class Message implements Serializable {
 	public String getContent() {
 		return content;
 	}
+
+	@Override
+	public boolean equals(Object obj) {
+		Message message = (Message)obj;
+		return sender.equals(message.sender) &&
+				receiver.equals(message.receiver) &&
+				created.equals(message.created) &&
+				subject.equals(message.subject) &&
+				content.equals(message.content);
+	}
 }

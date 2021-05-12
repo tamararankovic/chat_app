@@ -9,6 +9,7 @@ import javax.ejb.Remote;
 import javax.ejb.Stateful;
 
 import chatmanager.ChatManagerRemote;
+import connectionmanager.ConnectionManagerBean;
 import messagemanager.AgentMessage;
 import messagemanager.AgentMessageType;
 import model.User;
@@ -24,6 +25,7 @@ public class UserAgent implements Agent {
 	
 	@EJB private ChatManagerRemote chatManager;
 	@EJB WebSocket ws;
+	@EJB ConnectionManagerBean cm;
 
 	@Override
 	public void init(String agentId) {
@@ -93,6 +95,7 @@ public class UserAgent implements Agent {
 				ws.bindUsernameToSession(username, agentId);
 				ws.send(agentId, "login:OK " + identifier);
 				ws.sendToAllLoggedIn(ws.getLoggedInListTextMessage(chatManager.getLoggedIn()));
+				cm.postLoggedIn();
 			} else {
 				ws.send(agentId, "login:Logging in was unsuccessful! Incorrect username or password");
 			}
@@ -107,6 +110,7 @@ public class UserAgent implements Agent {
 			ws.unbindUsernameFromSession(agentId);
 			ws.send(agentId, "logout:OK");
 			ws.sendToAllLoggedIn(ws.getLoggedInListTextMessage(chatManager.getLoggedIn()));
+			cm.postLoggedIn();
 		} else {
 			ws.send(agentId, "logout:Logging out was unsuccessful!");
 		}
@@ -116,6 +120,7 @@ public class UserAgent implements Agent {
 		if(chatManager.register(new User(username, password))) {
 			ws.send(agentId, "register:Registration was successful!");
 			ws.sendToAllLoggedIn(ws.getRegisteredListTextMessage(chatManager.getRegistered()));
+			cm.postRegistered();
 		} else {
 			ws.send(agentId, "register:Registration was unsuccessful! Try another username");
 		}
@@ -146,6 +151,7 @@ public class UserAgent implements Agent {
 			chatManager.saveMessage(message);
 			ws.sendToOneLoggedIn(receiverUsername, ws.getMessageTextMessage(message));
 			ws.send(agentId, ws.getMessageListTextMessage(chatManager.getMessages(username), username));
+			cm.postMessages();
 		}
 	}
 	
