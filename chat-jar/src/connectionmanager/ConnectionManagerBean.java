@@ -33,6 +33,7 @@ import chatmanager.ChatManagerRemote;
 import model.Host;
 import model.User;
 import util.ResourceLoader;
+import websocket.WebSocket;
 
 @Singleton
 @Startup
@@ -45,6 +46,7 @@ public class ConnectionManagerBean implements ConnectionManager {
 	private List<String> connectedNodes = new ArrayList<String>();
 	
 	@EJB ChatManagerRemote chm;
+	@EJB WebSocket ws;
 	
 	@PostConstruct
 	private void init() {
@@ -127,6 +129,7 @@ public class ConnectionManagerBean implements ConnectionManager {
 		System.out.println("Deleting node with alias: " + alias);
 		connectedNodes.remove(alias);
 		chm.deleteLoggedInByHost(alias);
+		ws.sendToAllLoggedIn(ws.getLoggedInListTextMessage(chm.getLoggedIn()));
 	}
 
 	@Override
