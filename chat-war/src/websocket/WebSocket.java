@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.PreDestroy;
 import javax.ejb.LocalBean;
 import javax.ejb.Singleton;
 import javax.websocket.EndpointConfig;
@@ -55,7 +56,9 @@ public class WebSocket {
 	
 	@OnClose
 	public void onClose(Session session) {
-		agm().stopAgent(session.getId());
+		if(agm() != null) {
+			agm().stopAgent(session.getId());
+		}
 		sessions.remove(session);
 		System.out.println("Session with id: " + session.getId() + " closed");
 	}

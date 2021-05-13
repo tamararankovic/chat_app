@@ -25,6 +25,7 @@ public abstract class JNDILookup {
 	public static final String UserAgentLookup = JNDIPathChat + UserAgent.class.getSimpleName() + "!"
 			+ Agent.class.getName() + "?stateful";
 
+	@SuppressWarnings("unchecked")
 	public static <T> T lookUp(String name, Class<T> c) {
 		T bean = null;
 		try {
@@ -36,7 +37,7 @@ public abstract class JNDILookup {
 			context.close();
 
 		} catch (NamingException e) {
-			e.printStackTrace();
+		
 		}
 		return bean;
 	}

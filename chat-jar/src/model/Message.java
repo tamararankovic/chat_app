@@ -3,12 +3,20 @@ package model;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
+import util.JsonDateDeserializer;
+import util.JsonDateSerializer;
+
 public class Message implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	
 	private User sender;
 	private User receiver;
+	@JsonDeserialize(using = JsonDateDeserializer.class)
+	@JsonSerialize(using = JsonDateSerializer.class)
 	private LocalDateTime created;
 	private String subject;
 	private String content;
