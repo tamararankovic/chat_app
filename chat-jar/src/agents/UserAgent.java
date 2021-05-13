@@ -1,6 +1,8 @@
 package agents;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -147,7 +149,7 @@ public class UserAgent implements Agent {
 		if(chatManager.getRegistered(receiverUsername) != null && username != null) {
 			User receiver = chatManager.getRegistered(receiverUsername);
 			User sender = chatManager.getRegistered(username);
-			model.Message message = new model.Message(sender, receiver, LocalDateTime.now(), subject, content);
+			model.Message message = new model.Message(sender, receiver, LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS), subject, content);
 			chatManager.saveMessage(message);
 			ws.sendToOneLoggedIn(receiverUsername, ws.getMessageTextMessage(message));
 			ws.send(agentId, ws.getMessageListTextMessage(chatManager.getMessages(username), username));

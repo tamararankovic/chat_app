@@ -63,4 +63,9 @@ public class Message implements Serializable {
 				subject.equals(message.subject) &&
 				content.equals(message.content);
 	}
+	
+	@Override
+	public String toString() {
+		return "sender: " + sender.getUsername() + " receiver: " + receiver.getUsername() + " subject: " + subject + " content: " + content + " created: " + created;
+	}
 }

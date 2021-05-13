@@ -53,8 +53,18 @@ export class MessagesComponent implements OnInit {
     for(var message of this.allMessages) {
       var dateTimeBase = message.dateTime.toString().split('.')[0]
       var dateBase = dateTimeBase.split('T')[0]
-      var timeBase = dateTimeBase.split('T')[1]
-      message['date'] = new Date(Number(dateBase.split('-')[0]), Number(dateBase.split('-')[1]), Number(dateBase.split('-')[2]), Number(timeBase.split(':')[0]), Number(timeBase.split(':')[1]), Number(timeBase.split(':')[2]))
+      var timeBase : string = dateTimeBase.split('T')[1]
+      var hour = Number(timeBase.split(':')[0]) != NaN ? Number(timeBase.split(':')[0]) : 0
+      var minute = Number(timeBase.split(':')[1]) != NaN ? Number(timeBase.split(':')[1]) : 0
+      var second = Number(timeBase.split(':')[2]) != NaN ? Number(timeBase.split(':')[2]) : 0
+      if(timeBase.split(':').length < 3) {
+        second = 0
+      }
+      console.log(message.dateTime)
+      console.log(hour)
+      console.log(minute)
+      console.log(second)
+      message['date'] = new Date(Number(dateBase.split('-')[0]), Number(dateBase.split('-')[1]), Number(dateBase.split('-')[2]), hour, minute, second)
     }
     this.allMessages.sort((m1, m2) => m1['date'].getTime() - m2['date'].getTime())
   }

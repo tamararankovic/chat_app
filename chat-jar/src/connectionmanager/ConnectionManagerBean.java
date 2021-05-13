@@ -13,6 +13,7 @@ import javax.annotation.PreDestroy;
 import javax.ejb.EJB;
 import javax.ejb.LocalBean;
 import javax.ejb.Remote;
+import javax.ejb.Schedule;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
 import javax.management.AttributeNotFoundException;
@@ -184,17 +185,22 @@ public class ConnectionManagerBean implements ConnectionManager {
 		System.out.println("Handshake successful. Connected nodes: " + connectedNodes);
 	}
 	
-	//@Schedule(hour = "*", minute="*", second="*/30")
+	@Schedule(hour = "*", minute="*", second="*/120")
 	private void heartbeat() {
 		System.out.println("Heartbeat protocol initiated");
 		for(String node : connectedNodes) {
 			System.out.println("Pinging node with alias: " + node);
-			boolean pingSuccessful = pingNode(node);
-			if(!pingSuccessful) {
-				System.out.println("Node with alias: " + node + " not alive. Deleting..");
-				connectedNodes.remove(node);
-				instructNodesToDeleteNode(node);
-			}
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					boolean pingSuccessful = pingNode(node);
+					if(!pingSuccessful) {
+						System.out.println("Node with alias: " + node + " not alive. Deleting..");
+						connectedNodes.remove(node);
+						instructNodesToDeleteNode(node);
+					}
+				}
+			}).start();;
 		}
 	}
 
