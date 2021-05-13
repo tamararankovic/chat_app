@@ -13,7 +13,6 @@ import javax.annotation.PreDestroy;
 import javax.ejb.EJB;
 import javax.ejb.LocalBean;
 import javax.ejb.Remote;
-import javax.ejb.Schedule;
 import javax.ejb.Singleton;
 import javax.ejb.Startup;
 import javax.management.AttributeNotFoundException;
@@ -63,30 +62,57 @@ public class ConnectionManagerBean implements ConnectionManager {
 			rest.addNode(nodeAlias);
 			client.close();
 		}
-		int triesLeft = 2;
-		while(triesLeft > 0) {
-			try {
-				postRegistered(nodeAlias);
-				postLoggedIn(nodeAlias, localNode.getAlias(), chm.getLocallyLoggedIn());
-				for(String host : connectedNodes) {
-					List<User> users = chm.getLoggedInByHost(host);
-					if(users != null)
-						postLoggedIn(nodeAlias, host, users);
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					postRegistered(nodeAlias);
+					postLoggedIn(nodeAlias, localNode.getAlias(), chm.getLocallyLoggedIn());
+					for(String host : connectedNodes) {
+						List<User> users = chm.getLoggedInByHost(host);
+						if(users != null)
+							postLoggedIn(nodeAlias, host, users);
+					}
+					postMessages(nodeAlias);
+				} catch (Exception e) {
+					e.printStackTrace();
+					try {
+						postRegistered(nodeAlias);
+						postLoggedIn(nodeAlias, localNode.getAlias(), chm.getLocallyLoggedIn());
+						for(String host : connectedNodes) {
+							List<User> users = chm.getLoggedInByHost(host);
+							if(users != null)
+								postLoggedIn(nodeAlias, host, users);
+						}
+						postMessages(nodeAlias);
+					} catch (Exception e1) {
+						e1.printStackTrace();
+						deleteNode(nodeAlias);
+						instructNodesToDeleteNode(nodeAlias);
+					}
 				}
-				postMessages(nodeAlias);
+			}
+		}).start();
+		try {
+			List<String> returnNodes = new ArrayList<String>(connectedNodes);
+			returnNodes.add(localNode.getAlias());
+			connectedNodes.add(nodeAlias);
+			return returnNodes;
+		} catch (Exception e) {
+			e.printStackTrace();
+			try {
+				connectedNodes.remove(nodeAlias);
 				List<String> returnNodes = new ArrayList<String>(connectedNodes);
 				returnNodes.add(localNode.getAlias());
 				connectedNodes.add(nodeAlias);
 				return returnNodes;
-			} catch (Exception e) {
-				e.printStackTrace();
-			} finally {
-				triesLeft--;
+			} catch (Exception e1) {
+				e1.printStackTrace();
+				deleteNode(nodeAlias);
+				instructNodesToDeleteNode(nodeAlias);
+				return null;
 			}
 		}
-		deleteNode(nodeAlias);
-		instructNodesToDeleteNode(nodeAlias);
-		return new ArrayList<String>();
 	}
 
 	@Override
@@ -158,7 +184,7 @@ public class ConnectionManagerBean implements ConnectionManager {
 		System.out.println("Handshake successful. Connected nodes: " + connectedNodes);
 	}
 	
-	@Schedule(hour = "*", minute="*", second="*/30")
+	//@Schedule(hour = "*", minute="*", second="*/30")
 	private void heartbeat() {
 		System.out.println("Heartbeat protocol initiated");
 		for(String node : connectedNodes) {

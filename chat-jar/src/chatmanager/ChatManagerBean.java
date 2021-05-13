@@ -140,9 +140,15 @@ public class ChatManagerBean implements ChatManagerRemote {
 
 	@Override
 	public void syncRegistered(List<User> users) {
+		System.out.println("registered before sync:");
+		for(User u : registeredUsers)
+			System.out.println(u.getUsername());
 		for(User newRegistered : users)
-			if(!registeredUsers.contains(newRegistered))
+			if(!registeredUsers.stream().anyMatch(u -> u.getUsername().equals(newRegistered.getUsername())))
 				registeredUsers.add(newRegistered);
+		System.out.println("registered after sync:");
+		for(User u : registeredUsers)
+			System.out.println(u.getUsername());
 	}
 
 	@Override
