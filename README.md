@@ -1,6 +1,6 @@
 # Chat Application
 
-A project for Agent Technologies course (FTN, University of Novi Sad), built using Java EE technologies and Angular.
+A project for the Distributed Artificial Intelligence and Intelligent Agents course (FTN, University of Novi Sad), built using Java EE technologies and Angular.
 
 ## Setup ##
 * Java Enterprise Application
